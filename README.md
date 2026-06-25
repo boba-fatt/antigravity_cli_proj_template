@@ -13,12 +13,8 @@ The main reason I put this together is that I got sick of prompt bloat and absol
 
 ```text
 .
-├── rules.md
-├── workflow.md
-├── agents.md
 └── .agents/
-    ├── rules/
-    │   └── antigravity-rtk-rules.md
+    ├── AGENTS.md
     ├── scratchpad/
     │   └── .gitkeep
     ├── toolset/
@@ -27,10 +23,7 @@ The main reason I put this together is that I got sick of prompt bloat and absol
     └── memory/
         └── cli_knowledge.jsonl
 ```
-*   **`rules.md`**: Global policies for the Main Agent. Sets workspace boundaries, enforces the terminal proxy, and kills infinite loops with a strict 3-strike fail-safe rule.
-*   **`workflow.md`**: The actual step-by-step automation blueprint. Enforces strict file boundaries to decide between scripting and subagent escalation.
-*   **`agents.md`**: The operational manual for background subagents. Standardizes state discovery to prevent blind retries and enforces the decoupled memory controller.
-*   **`.agents/rules/antigravity-rtk-rules.md`**: Forces the agent to check the local toolset index before it starts code generation or wastes tokens on deep reasoning steps[cite: 1].
+*   **`.agents/AGENTS.md`**: The consolidated, unified ruleset for both the Main Agent and all subagents. Sets workspace boundaries, enforces `rtk` proxying, sets scratchpad vs subagent ceilings, dictates script-first workflows, and details the fail-safe logging sequence. Automatically detected by Antigravity on startup.
 *   **`.agents/toolset/blueprint_tool.py`**: A strict CLI API-style controller to handle all storage I/O, deduplication natively in code, ensuring high-speed concurrent JSON Lines processing.
 
 ---
@@ -76,8 +69,6 @@ A fantastic low-latency transport layer for Model Context Protocol (MCP) servers
 *   **Author**: Jayanth Chandra
 *   **Source**: [https://github.com/jayanthchandra/Slim](https://github.com/jayanthchandra/Slim)
 
----
-
 ## Usage
 
-Just drop this directory structure directly into the root of whatever project workspace you are spinning up. Point your main coding agent or IDE configuration to read `rules.md` at system startup to initialize the operational pipeline.
+Simply drop the `.agents/` directory directly into the root of any project workspace you spin up. The `.agents/AGENTS.md` file will be automatically discovered, loaded, and followed by Antigravity at system startup.
