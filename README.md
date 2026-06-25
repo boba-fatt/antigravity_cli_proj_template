@@ -9,6 +9,22 @@ The main reason I put this together is that I got sick of prompt bloat and absol
 
 ---
 
+## 🚀 Quick Start One-Liners
+
+Copy and paste the appropriate command below to download the template into a new directory, navigate into it, and launch `agy` in a single command. (Be sure to replace `YOUR_PROJECT_NAME_HERE` with your desired project name):
+
+### Windows (PowerShell)
+```powershell
+$proj="YOUR_PROJECT_NAME_HERE"; git clone --depth=1 https://github.com/boba-fatt/antigravity_cli_proj_template $proj && cd $proj; agy
+```
+
+### Linux / macOS (Bash)
+```bash
+proj="YOUR_PROJECT_NAME_HERE"; git clone --depth=1 https://github.com/boba-fatt/antigravity_cli_proj_template "$proj" && cd "$proj" && agy
+```
+
+---
+
 ## The Folder Structure
 
 ```text
