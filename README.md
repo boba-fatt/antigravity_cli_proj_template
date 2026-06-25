@@ -62,12 +62,22 @@ An incredible shell proxy that sits between your commands and the agent, automat
 *   **Site**: [https://www.rtk-ai.app](https://www.rtk-ai.app)
 *   **Source**: [https://github.com/rtk-ai/rtk](https://github.com/rtk-ai/rtk)
 
-### 2. SLIM
+### 2. SLIM (Context Compressor)
 
 A fantastic low-latency transport layer for Model Context Protocol (MCP) servers. It handles compressed pipeline routing so the agent can check database schema changes or system states without dumping full text logs into the chat window.
 
-*   **Author**: Jayanth Chandra
-*   **Source**: [https://github.com/jayanthchandra/Slim](https://github.com/jayanthchandra/Slim)
+*   **Original Author**: Jayanth Chandra (Source: [jayanthchandra/Slim](https://github.com/jayanthchandra/Slim))
+*   **Antigravity-Adapted Fork**: [boba-fatt/Slim-Antigravity](https://github.com/boba-fatt/Slim-Antigravity)
+    *   *Reworked specifically to locate all active Antigravity plugins and extensions, resolve system-independent path separators, and dynamically interpolate `$extensionPath` during initialization.*
+
+#### Install & Configure Slim for Antigravity:
+```bash
+# 1. Install the plugin natively via the agy CLI
+agy plugin install https://github.com/boba-fatt/Slim-Antigravity
+
+# 2. Run the initialization process
+node ~/.gemini/config/plugins/slim/dist/index.js init --cli gemini
+```
 
 ## Usage
 
