@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import argparse
+import re
 from datetime import datetime
 
 MEMORY_FILE = ".agents/memory/cli_knowledge.jsonl"
@@ -49,23 +50,39 @@ def write_records(records):
         os.fsync(f.fileno())
 
 def handle_check(cmd):
-    """Deterministic pre-flight verification."""
+    """Deterministic pre-flight verification using compiled regex patterns."""
     records = read_records()
-    matches = [r for r in records if r.get("command") == cmd or cmd in r.get("command", "")]
-    if not matches:
-        print(f"No cached context found for: {cmd}")
-        return
+    matched_entry = None
 
-    print(json.dumps(matches, indent=2))
-    
-    # If the file gets too large, signal maintenance without blocking
+    # Scan from newest to oldest entries
+    for entry in reversed(records):
+        pattern = entry.get("command_regex")
+        if pattern:
+            try:
+                if re.search(pattern, cmd):
+                    matched_entry = entry
+                    if entry.get("status") == "failed":
+                        print(f"[PRE-FLIGHT] BLOCKED: Known failure signature matched: {pattern}")
+                        print(json.dumps({"status": "failed", "last_error": entry.get("last_error")}))
+                        sys.exit(1)
+                    break
+            except re.error:
+                continue
+
+    if matched_entry and matched_entry.get("status") == "success":
+        print(f"[PRE-FLIGHT] HIT: Historical resolution context found.")
+        print(json.dumps({"status": "success", "resolved_action": matched_entry.get("resolved_action")}, indent=2))
+    else:
+        print(f"[PRE-FLIGHT] CLEAN: No matching execution boundaries tripped for: {cmd}")
+
+    # Flag maintenance without blocking active execution
     if len(records) > MAX_CACHE_RECORDS:
         print(f"\n[MAINTENANCE_REQUIRED: COUNT={len(records)}]")
 
 def handle_log_success(cmd, error, fix):
     """Registers a verified fix pathway."""
     record = {
-        "command": cmd,
+        "command_regex": cmd, # Updated to match handle_check logic
         "error_signature": error,
         "resolved_action": fix,
         "status": "success",
@@ -79,7 +96,7 @@ def handle_log_success(cmd, error, fix):
 def handle_log_fail(cmd, error):
     """Registers a persistent failure state instantly."""
     record = {
-        "command": cmd,
+        "command_regex": cmd, # Updated to match handle_check logic
         "error_signature": error,
         "status": "failed",
         "occurrences": 1,
@@ -120,7 +137,7 @@ def handle_purge(cmd):
     """Purges capability block matching a command when user resolves environment issue."""
     records = read_records()
     initial_count = len(records)
-    records = [r for r in records if r.get("command") != cmd]
+    records = [r for r in records if r.get("command_regex") != cmd]
     
     if len(records) < initial_count:
         write_records(records)
@@ -148,7 +165,7 @@ def handle_cleanup():
     # Deduplication
     deduped = {}
     for r in records:
-        key = (r.get("command"), r.get("error_signature"))
+        key = (r.get("command_regex"), r.get("error_signature"))
         if key in deduped:
             existing = deduped[key]
             existing["occurrences"] = existing.get("occurrences", 0) + r.get("occurrences", 1)

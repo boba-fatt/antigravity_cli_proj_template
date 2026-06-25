@@ -1,0 +1,1 @@
+{"command_regex": "^npm install", "error_signature": "ENOENT", "resolved_action": "rm package-lock.json && npm i", "status": "success", "occurrences": 2, "last_used": "2026-06-25T03:29:06Z", "id": 500107}
