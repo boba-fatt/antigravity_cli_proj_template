@@ -11,4 +11,4 @@
 
 ## 3. Subagent & Workflow Oversight
 - **Workflow Enforcement**: You must strictly execute the script-first methodology dictated in `workflow.md` before spinning up subagents.
-- **Fail-Safe Mechanism**: If any self-healing script or subagent loop fails 3 times sequentially, ensure the failure is recorded to `cli_knowledge.json` with `"status": "failed"`, immediately pause operations, summarize the roadblock, and return control to the USER.
+- **Fail-Safe Mechanism**: If any self-healing script or subagent loop fails 3 times sequentially, use `.agents/toolset/blueprint_tool.py --log-fail` to log the pattern instantly, immediately pause operations, summarize the roadblock, and return control to the USER. When the user resolves the issue, use `--purge` to clear the failed state.

@@ -1,7 +1,9 @@
 # Antigravity Adaptive Automation Workflow (SLIM & rtk Powered)
 
 ## Execution & Tooling Protocol
-- **The Script-First Imperative**: Before spawning an autonomous subagent, you must algorithmically prove the task cannot be solved via a self-contained script (Python, PowerShell, Bash). If it can be coded, subagent creation is strictly forbidden.
+- **Hard Operational Ceilings**: Before spawning an autonomous subagent, you must apply a strict file-boundary heuristic:
+  - Tasks modifying **1 to 2 files** are strictly bound to the `.agents/scratchpad/` workflow. Subagent creation is forbidden.
+  - Complex tasks targeting **more than 2 files** bypass the scratchpad and escalate directly to subagents.
 - **Permanent Promotion**: Move proven scripts that solve repeatable tasks to `.agents/toolset/` and index them in `.agents/toolset/README.md`.
 
 ## Phase 1: Toolset Discovery & Script Selection
@@ -15,14 +17,17 @@
 3. **Token Limit**: Capture only the final output or targeted error lines. Strip all intermediate print statements.
 4. **Promote**: Move successful, repeatable scripts into `.agents/toolset/` and update `README.md`.
 
-## Phase 3: Trained Subagent Escalation (Last Resort)If static scripting cannot handle deep conceptual cross-file edits, spin up a subagent using `agents.md`:
-1. **Minimal Context**: Inject *only* targeted file content snippets, the precise error string, and the `.agents/memory/cli_knowledge.json` history dictionary.
-2. **Pre-Flight Lookup**: The subagent must cross-reference `cli_knowledge.json` before writing code or running commands to intercept known failures.
+## Phase 3: Trained Subagent Escalation
+If the task targets more than 2 files, spin up a subagent using `agents.md`:
+1. **Minimal Context**: Inject *only* targeted file content snippets and the precise error string. DO NOT inject raw cache data.
+2. **Pre-Flight Lookup**: The subagent must run `.agents/toolset/blueprint_tool.py --check "<cmd>"` to intercept known failures.
 3. **Autonomous Execution & Self-Healing Loop**: The subagent attempts to fix the issue.
-   - **On CLI Failure**: Intercept stderr, consult memory, auto-correct parameters, and retry (Max 3 attempts).
-   - **On Loop Failure (3+ times)**: Log the pattern directly to `.agents/memory/cli_knowledge.json` with `"status": "failed"` following the optimization laws in `agents.md`, then exit and prompt the user.
+   - **On CLI Failure**: You must run a state-discovery command sequence (`ls`, path validation, config checks) *before* attempting to mutate parameters and retry (Max 3 attempts).
+   - **On Loop Failure (3+ times)**: Run `.agents/toolset/blueprint_tool.py --log-fail --cmd "<cmd>" --error "<err>"` to cache a persistent failure state instantly, then exit and prompt the user.
+   - **User Recovery Prompt**: For environment crashes, prompt the user to confirm resolution. If resolved, execute `.agents/toolset/blueprint_tool.py --purge "<cmd>"` to clear the capability block.
 
-## Phase 4: Post-Success Reflection & Training
+## Phase 4: Post-Success Reflection & Maintenance
 1. **Identify the Core Fix**: Extract the exact command or code line that solved the problem.
-2. **Train the System**: Update or append the behavior to `.agents/memory/cli_knowledge.json` with `"status": "success"` following the data hygiene routines in `agents.md`.
+2. **Train the System**: Run `.agents/toolset/blueprint_tool.py --log-success --cmd "<cmd>" --error "<err>" --fix "<fix>"` to atomically append the verified fix pathway.
 3. **Clean Delivery**: Return exactly a 1-sentence success confirmation and the final file git diff back to the Main Agent.
+4. **Housekeeping (Idle Time)**: When the workspace pipeline is completely idle, the Main Agent should trigger `.agents/toolset/blueprint_tool.py --cleanup` to rotate, deduplicate, and truncate the active cache database.

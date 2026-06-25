@@ -25,36 +25,36 @@ The main reason I put this together is that I got sick of prompt bloat and absol
     │   ├── README.md
     │   └── blueprint_tool.py
     └── memory/
-        └── cli_knowledge.json
+        └── cli_knowledge.jsonl
 ```
 *   **`rules.md`**: Global policies for the Main Agent. Sets workspace boundaries, enforces the terminal proxy, and kills infinite loops with a strict 3-strike fail-safe rule.
-*   **`workflow.md`**: The actual step-by-step automation blueprint. Forces the agent to try coding a solution before wasting money on subagents.
-*   **`agents.md`**: The operational manual for background subagents. Standardizes how they self-heal when a command crashes and dictates how they write clean logs.
+*   **`workflow.md`**: The actual step-by-step automation blueprint. Enforces strict file boundaries to decide between scripting and subagent escalation.
+*   **`agents.md`**: The operational manual for background subagents. Standardizes state discovery to prevent blind retries and enforces the decoupled memory controller.
 *   **`.agents/rules/antigravity-rtk-rules.md`**: Forces the agent to check the local toolset index before it starts code generation or wastes tokens on deep reasoning steps[cite: 1].
-*   **`.agents/toolset/blueprint_tool.py`**: A working Python template that demonstrates the exact schema, deduplication mechanics, and cache capping rules the agent needs to follow when moving a script to the permanent toolset[cite: 2].
+*   **`.agents/toolset/blueprint_tool.py`**: A strict CLI API-style controller to handle all storage I/O, deduplication natively in code, ensuring high-speed concurrent JSON Lines processing.
 
 ---
 
 ## How the Workflow Saves Tokens
 
-Instead of letting an LLM jump straight into complex, multi-turn code edits, the configuration enforces a strict **Script-First Lifecycle**:
+Instead of letting an LLM jump straight into complex, multi-turn code edits, the configuration enforces a strict **Hard Operational Ceilings**:
 
-1.  **Discovery**: The agent must check `.agents/toolset/README.md` first[cite: 1]. If a script already exists for the task (e.g., cleaning imports or running a specialized docker test suite), it runs that tool directly and stops[cite: 1].
-2.  **Scratchpad Testing**: If no tool exists, the agent is forbidden from launching an autonomous subagent if the task can be handled via code. It must draft and run a self-contained automation script (Python, Bash, or PowerShell) inside `.agents/scratchpad/`.
-3.  **Promotion**: If that script successfully fixes a repeatable or recurring problem, it gets permanently moved into `.agents/toolset/` and documented in the README so it can be automatically discovered next time[cite: 1].
-4.  **Escalation**: Autonomous subagents are used only as an absolute last resort for deep, conceptual multi-file edits. When spawned, they receive a bare-minimum context injection (only the target files and the specific error string) to protect your wallet.
+1.  **Discovery**: The agent must check `.agents/toolset/README.md` first[cite: 1]. If a script already exists for the task, it runs that tool directly and stops.
+2.  **Scratchpad Testing**: For tasks modifying 1 to 2 files, the agent is strictly bound to the `.agents/scratchpad/` workflow. Subagent creation is forbidden.
+3.  **Promotion**: If that script successfully fixes a repeatable or recurring problem, it gets permanently moved into `.agents/toolset/` and documented in the README.
+4.  **Escalation**: For complex tasks targeting more than 2 files, the agent bypasses the scratchpad and escalates directly to subagents.
 
 ---
 
 ## Why this beats RAG for CLI operations
 
-Traditional vector-search RAG sucks for local terminal execution because it suffers from semantic drift (pulling up a completely unrelated bash error when you have a syntax issue in a powershell script) and adds a massive token/latency tax.
+Traditional vector-search RAG sucks for local terminal execution because it suffers from semantic drift and adds a massive token tax.
 
-Instead, this template uses a deterministic, pattern-matched JSON table (`.agents/memory/cli_knowledge.json`)[cite: 2]. Subagents maintain it automatically using these exact hygiene laws:
+Instead, this template uses a deterministic, pattern-matched Decoupled Memory Controller (Gateway Pattern) via `.agents/toolset/blueprint_tool.py` against `.agents/memory/cli_knowledge.jsonl`.
 
-*   **Regex Generalization**: The agent automatically scrubs out machine-specific file paths, commit hashes, or unique IDs and replaces them with clean regex wildcards.
-*   **Deduplication**: Repeating an error doesn't create a massive wall of text. It just updates the last-used timestamp and increments an occurrence counter.
-*   **Size Capping**: The total array is strictly capped at 100 records. If it fills up, the oldest, lowest-frequency fixes are dropped to ensure pre-flight lookups take nanoseconds and cost zero tokens.
+*   **Atomic Logging**: Eliminates write-concurrency locks using high-speed `.jsonl` line appends.
+*   **State Discovery**: Forces agents to validate local state (e.g., `ls`) rather than blindly retrying failed commands.
+*   **Idle Maintenance**: Offloads deduplication and size capping to an idle-time `--cleanup` flag process.
 
 ---
 

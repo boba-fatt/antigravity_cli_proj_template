@@ -2,112 +2,214 @@
 import os
 import sys
 import json
-import subprocess
+import argparse
 from datetime import datetime
 
-# Paths to agent infrastructure
-MEMORY_FILE = ".agents/memory/cli_knowledge.json"
-SCRATCHPAD = ".agents/scratchpad/"
+MEMORY_FILE = ".agents/memory/cli_knowledge.jsonl"
+BACKUP_FILE_PREFIX = ".agents/memory/cli_knowledge_backup_"
 MAX_CACHE_RECORDS = 100
 
-def read_memory():
-    """Reads the optimized unified memory layout."""
-    if os.path.exists(MEMORY_FILE):
-        try:
-            with open(MEMORY_FILE, "r") as f:
-                data = json.load(f)
-                if "records" in data:
-                    return data
-        except json.JSONDecodeError:
-            pass
-    return {"records": []}
+def get_timestamp():
+    # Use timezone-aware UTC datetime
+    from datetime import timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-def write_memory(memory):
-    """Writes the optimized unified memory layout back to disk."""
+def ensure_directory():
     os.makedirs(os.path.dirname(MEMORY_FILE), exist_ok=True)
+
+def append_record(record):
+    """Atomically append a record to the JSON Lines file."""
+    ensure_directory()
+    with open(MEMORY_FILE, "a") as f:
+        f.write(json.dumps(record) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+def read_records():
+    """Read all records from the JSON Lines file."""
+    if not os.path.exists(MEMORY_FILE):
+        return []
+    records = []
+    with open(MEMORY_FILE, "r") as f:
+        for line in f:
+            if line.strip():
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return records
+
+def write_records(records):
+    """Overwrite the JSON Lines file with a list of records."""
+    ensure_directory()
     with open(MEMORY_FILE, "w") as f:
-        json.dump(memory, f, indent=2)
+        for record in records:
+            f.write(json.dumps(record) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
 
-def update_cli_knowledge(tool, command, error_sig, action, status):
-    """
-    Implements the Cache Optimization Laws from agents.md:
-    - Regex Generalization (Placeholder / Agent responsibility)
-    - Deduplication & Incremental Occurrences
-    - Cache Size Capping (Max 100)
-    """
-    memory = read_memory()
-    records = memory["records"]
+def handle_check(cmd):
+    """Deterministic pre-flight verification."""
+    records = read_records()
+    matches = [r for r in records if r.get("command") == cmd or cmd in r.get("command", "")]
+    if not matches:
+        print(f"No cached context found for: {cmd}")
+        return
+
+    print(json.dumps(matches, indent=2))
     
-    # 1. Deduplication Check
-    existing_record = None
-    for r in records:
-        if r.get("tool") == tool and r.get("error_signature") == error_sig:
-            existing_record = r
-            break
-            
-    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    
-    if existing_record:
-        existing_record["occurrences"] = existing_record.get("occurrences", 0) + 1
-        existing_record["status"] = status
-        existing_record["last_used"] = timestamp
-        existing_record["resolved_action"] = action
-    else:
-        # Create a brand new record entry
-        new_record = {
-            "tool": tool,
-            "command_regex": command,  # Agent will substitute variables with regex patterns
-            "error_signature": error_sig,
-            "resolved_action": action,
-            "status": status,
-            "occurrences": 1,
-            "last_used": timestamp
-        }
-        records.append(new_record)
-        
-    # 2. Cache Size Capping (Keep top 100 by frequency/recency)
+    # If the file gets too large, signal maintenance without blocking
     if len(records) > MAX_CACHE_RECORDS:
-        # Sort by occurrences (ascending), then last_used (ascending) to evict weakest entries
-        records.sort(key=lambda x: (x.get("occurrences", 1), x.get("last_used", "")))
-        memory["records"] = records[-MAX_CACHE_RECORDS:]
-    else:
-        memory["records"] = records
-        
-    write_memory(memory)
+        print(f"\n[MAINTENANCE_REQUIRED: COUNT={len(records)}]")
 
-def run_command_with_self_healing(tool_name, command, max_retries=3):
-    """
-    Executes a command. If it fails, checks memory, 
-    attempts a fix, and logs the outcome to save token context.
-    """
-    retries = 0
-    last_error = ""
+def handle_log_success(cmd, error, fix):
+    """Registers a verified fix pathway."""
+    record = {
+        "command": cmd,
+        "error_signature": error,
+        "resolved_action": fix,
+        "status": "success",
+        "occurrences": 1,
+        "last_used": get_timestamp(),
+        "id": hash(f"{cmd}{error}") % 1000000 # Simple unique ID for the record
+    }
+    append_record(record)
+    print(f"Successfully logged fix for '{cmd}'")
+
+def handle_log_fail(cmd, error):
+    """Registers a persistent failure state instantly."""
+    record = {
+        "command": cmd,
+        "error_signature": error,
+        "status": "failed",
+        "occurrences": 1,
+        "last_used": get_timestamp(),
+        "id": hash(f"{cmd}{error}") % 1000000
+    }
+    append_record(record)
+    print(f"Successfully logged failure for '{cmd}'")
+
+def handle_review_fails():
+    """Pulls historical failure data for review."""
+    records = read_records()
+    fails = [r for r in records if r.get("status") == "failed"]
+    if not fails:
+        print("No failed records found.")
+        return
+    print(json.dumps(fails, indent=2))
+
+def handle_convert_to_fix(record_id, resolved_cmd):
+    """Promotes a failure entry into a successful automated fix block."""
+    records = read_records()
+    found = False
+    for r in records:
+        if str(r.get("id")) == str(record_id):
+            r["status"] = "success"
+            r["resolved_action"] = resolved_cmd
+            r["last_used"] = get_timestamp()
+            found = True
+            break
     
-    while retries < max_retries:
-        print(f"Executing via rtk proxy: {command} (Attempt {retries + 1})")
-        
-        # Ensure command leverages rtk proxy to preserve context token windows
-        full_cmd = f"rtk {command}" if not command.startswith("rtk") else command
-        
-        result = subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print("Success!")
-            if retries > 0:
-                # Log the successful correction pathway
-                update_cli_knowledge(tool_name, command, last_error, f"Auto-healed on retry {retries}", "success")
-            return True
+    if found:
+        write_records(records)
+        print(f"Successfully converted record {record_id} to a fix.")
+    else:
+        print(f"Record ID {record_id} not found.", file=sys.stderr)
+
+def handle_purge(cmd):
+    """Purges capability block matching a command when user resolves environment issue."""
+    records = read_records()
+    initial_count = len(records)
+    records = [r for r in records if r.get("command") != cmd]
+    
+    if len(records) < initial_count:
+        write_records(records)
+        print(f"Successfully purged records for '{cmd}'.")
+    else:
+        print(f"No records found matching '{cmd}' to purge.", file=sys.stderr)
+
+def handle_cleanup():
+    """Rotates data, deduplicates, and truncates the active database."""
+    if not os.path.exists(MEMORY_FILE):
+        print("No memory file to clean up.")
+        return
+
+    records = read_records()
+    if not records:
+        print("Memory file is empty.")
+        return
+
+    # Backup rotation
+    from datetime import timezone
+    backup_path = f"{BACKUP_FILE_PREFIX}{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.jsonl"
+    os.rename(MEMORY_FILE, backup_path)
+    print(f"Created backup at {backup_path}")
+
+    # Deduplication
+    deduped = {}
+    for r in records:
+        key = (r.get("command"), r.get("error_signature"))
+        if key in deduped:
+            existing = deduped[key]
+            existing["occurrences"] = existing.get("occurrences", 0) + r.get("occurrences", 1)
+            # Take the most recent status/timestamp
+            if r.get("last_used", "") > existing.get("last_used", ""):
+                existing["status"] = r.get("status", existing.get("status"))
+                existing["resolved_action"] = r.get("resolved_action", existing.get("resolved_action"))
+                existing["last_used"] = r.get("last_used")
+        else:
+            deduped[key] = r
             
-        last_error = result.stderr.strip()
-        print(f"Command Failed. Stderr: {last_error}")
-        
-        # [Self-healing mutation logic based on pre-flight lookups happens here]
-        
-        retries += 1
-        
-    # If it falls through all retries, log the sequential failure to the cache
-    update_cli_knowledge(tool_name, command, last_error, "Failed all self-healing sequences", "failed")
-    return False
+    sorted_records = list(deduped.values())
+
+    # Sort by frequency (desc) and then recency (desc), keeping top 100
+    sorted_records.sort(key=lambda x: (x.get("occurrences", 0), x.get("last_used", "")), reverse=True)
+    final_records = sorted_records[:MAX_CACHE_RECORDS]
+
+    write_records(final_records)
+    print(f"Cleanup complete. Deduped {len(records)} records down to {len(final_records)}.")
 
 if __name__ == "__main__":
-    print("Agent Blueprint initialized with Unified Memory Layout.")
+    parser = argparse.ArgumentParser(description="Antigravity Memory Controller API")
+    parser.add_argument("--check", metavar="CMD", help="Deterministic pre-flight verification.")
+    parser.add_argument("--log-success", action="store_true", help="Registers a verified fix pathway.")
+    parser.add_argument("--log-fail", action="store_true", help="Registers a persistent failure state.")
+    parser.add_argument("--review-fails", action="store_true", help="Pulls historical failure data.")
+    parser.add_argument("--convert-to-fix", action="store_true", help="Promotes a failure to a fix.")
+    parser.add_argument("--cleanup", action="store_true", help="Rotates, deduplicates, and truncates the database.")
+    parser.add_argument("--purge", metavar="CMD", help="Purges all records related to a command.")
+
+    # Arguments for specific actions
+    parser.add_argument("--cmd", help="Command associated with the log.")
+    parser.add_argument("--error", help="Error signature associated with the log.")
+    parser.add_argument("--fix", help="Resolution action for log-success.")
+    parser.add_argument("--id", help="Record ID for convert-to-fix.")
+    parser.add_argument("--resolved-cmd", help="Resolved command for convert-to-fix.")
+
+    args = parser.parse_args()
+
+    if args.check:
+        handle_check(args.check)
+    elif args.log_success:
+        if not args.cmd or not args.error or not args.fix:
+            print("Error: --log-success requires --cmd, --error, and --fix.", file=sys.stderr)
+            sys.exit(1)
+        handle_log_success(args.cmd, args.error, args.fix)
+    elif args.log_fail:
+        if not args.cmd or not args.error:
+            print("Error: --log-fail requires --cmd and --error.", file=sys.stderr)
+            sys.exit(1)
+        handle_log_fail(args.cmd, args.error)
+    elif args.review_fails:
+        handle_review_fails()
+    elif args.convert_to_fix:
+        if not args.id or not args.resolved_cmd:
+            print("Error: --convert-to-fix requires --id and --resolved-cmd.", file=sys.stderr)
+            sys.exit(1)
+        handle_convert_to_fix(args.id, args.resolved_cmd)
+    elif args.purge:
+        handle_purge(args.purge)
+    elif args.cleanup:
+        handle_cleanup()
+    else:
+        parser.print_help()
