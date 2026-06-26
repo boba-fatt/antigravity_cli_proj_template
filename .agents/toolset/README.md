@@ -4,4 +4,11 @@ This directory contains permanent, highly optimized scripts to accomplish tasks 
 
 ## Available Tools
 
-*No custom tools generated yet. Create scripts in this directory and document them here.*
+* [build-project.ps1](file:///C:/PROJECTS/SO_Survey_Generator/.agents/toolset/build-project.ps1): A PowerShell script that dynamically detects the project's Python environment and version, extracts import statements, ensures PyInstaller is installed locally or via `uv`, compiles the app while excluding unused dependencies to reduce build size, and outputs a detailed `BUILD_REPORT.md` markdown summary.
+
+### Usage:
+Run the compiler from the project root:
+```powershell
+powershell -ExecutionPolicy Bypass -File .agents/toolset/build-project.ps1
+```
+
