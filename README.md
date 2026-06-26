@@ -15,14 +15,18 @@ Copy and paste the appropriate command below to download the template into a new
 
 ### Windows (PowerShell)
 ```powershell
-$proj="YOUR_PROJECT_NAME_HERE"; git clone --depth=1 https://github.com/boba-fatt/antigravity_cli_proj_template $proj && cd $proj; agy
+$proj="YOUR_PROJECT_NAME_HERE"; git clone --depth=1 https://github.com/boba-fatt/antigravity_cli_proj_template $proj; Remove-Item -Path "$proj\.git" -Recurse -Force; cd $proj
 ```
 
 ### Linux / macOS (Bash)
 ```bash
-proj="YOUR_PROJECT_NAME_HERE"; git clone --depth=1 https://github.com/boba-fatt/antigravity_cli_proj_template "$proj" && cd "$proj" && agy
+proj="YOUR_PROJECT_NAME_HERE"; git clone --depth=1 https://github.com/boba-fatt/antigravity_cli_proj_template "$proj" && rm -rf "$proj/.git" && cd "$proj"
 ```
 
+### Windows & Linux / macOS (degit)
+```bash
+npx degit boba-fatt/antigravity_cli_proj_template YOUR_PROJECT_NAME_HERE && cd YOUR_PROJECT_NAME_HERE
+```
 ---
 
 ## The Folder Structure
